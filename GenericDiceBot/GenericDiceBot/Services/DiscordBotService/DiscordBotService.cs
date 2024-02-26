@@ -3,6 +3,7 @@ using Discord;
 using Discord.Net;
 using Discord.WebSocket;
 using GenericDiceBot.Dtos.V1;
+using GenericDiceBot.Utilities;
 using Newtonsoft.Json;
 
 namespace GenericDiceBot.Services.DiscordBotService
@@ -23,6 +24,11 @@ namespace GenericDiceBot.Services.DiscordBotService
             }
             _token = token;
             _client = new DiscordSocketClient();
+            _client.Log += message =>
+{
+                Console.WriteLine(message);
+                return Task.CompletedTask;
+            };
             _client.Ready += ClientReady;
             _client.SlashCommandExecuted += SlashCommandExecuted;
         }
@@ -44,10 +50,17 @@ namespace GenericDiceBot.Services.DiscordBotService
                 .WithName("here")
                 .WithDescription("Sets the dice throw channel");
 
+            SlashCommandBuilder throwCommand = new SlashCommandBuilder()
+                .WithName("throw")
+                .WithDescription("Throws the requested dice and returns the result")
+                .AddOption("dice", ApplicationCommandOptionType.String, "a dice string you want to throw", isRequired: true);
+
             try
             {
                 await _client.CreateGlobalApplicationCommandAsync(hereCommand.Build());
+                await _client.CreateGlobalApplicationCommandAsync(throwCommand.Build());
                 _commandMap.Add(hereCommand.Name, HereCommand);
+                _commandMap.Add(throwCommand.Name, ThrowCommand);
             }
             catch(HttpException ex)
             {
@@ -74,6 +87,14 @@ namespace GenericDiceBot.Services.DiscordBotService
             await command.RespondAsync($"Dice throw channel is now <#{_diceChannelId}>");
         }
 
+        private async Task ThrowCommand(SocketSlashCommand command)
+        {
+            string request = (string)command.Data.Options.First().Value;
+            DiceResultDtoV1[] results = DiceThrow.Parse(request);
+            int sum = results.Sum(r => r.Result);
+            await command.RespondAsync(embed: CreateDiceThrowEmbed(request, results, sum));
+        }
+
         public async Task PostToDiceChannel(string request, DiceResultDtoV1[] results, int sum, string? reason = null, string? requester = null, string? imageUrl = null)
         {
             if(_diceChannelId == null)
@@ -94,12 +115,17 @@ namespace GenericDiceBot.Services.DiscordBotService
                 return;
             }
 
+            await messageChannel.SendMessageAsync(embed: CreateDiceThrowEmbed(request, results, sum, reason, requester, imageUrl));
+        }
+
+        private Embed CreateDiceThrowEmbed(string request, DiceResultDtoV1[] results, int sum, string? reason = null, string? requester = null, string? imageUrl = null)
+        {
             EmbedFieldBuilder requestBuilder = new EmbedFieldBuilder()
                 .WithName("Request")
                 .WithValue(request);
 
             string resultValue = string.Empty;
-            foreach(DiceResultDtoV1 result in results.Where(r => r.Type == Utilities.DiceResultType.Random))
+            foreach (DiceResultDtoV1 result in results.Where(r => r.Type == Utilities.DiceResultType.Random))
             {
                 resultValue += $"{result.Result}, ";
             }
@@ -119,11 +145,15 @@ namespace GenericDiceBot.Services.DiscordBotService
                 .WithFooter(footer => footer.Text = "Pipsi Dice - A product of Pipsi Duke™")
                 .WithCurrentTimestamp();
 
+            EmbedAuthorBuilder authorBuilder = new EmbedAuthorBuilder()
+                .WithName(requester ?? "Unknown Requester");
             if (!string.IsNullOrEmpty(imageUrl))
             {
-                embedBuilder.WithAuthor(requester ?? "Unknown Requester", imageUrl);
+                authorBuilder.WithIconUrl(imageUrl);
             }
-            await messageChannel.SendMessageAsync(embed: embedBuilder.Build());
+            embedBuilder.WithAuthor(authorBuilder);
+
+            return embedBuilder.Build();
         }
     }
 }
