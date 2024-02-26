@@ -12,6 +12,7 @@ namespace GenericDiceBot.Services.DiscordBotService
         private readonly DiscordSocketClient _client;
         private string _token;
         private ulong? _diceChannelId = null;
+        private Dictionary<string, Func<SocketSlashCommand, Task>> _commandMap = new Dictionary<string, Func<SocketSlashCommand, Task>>();
 
         public DiscordBotService(IConfiguration configuration)
         {
@@ -46,6 +47,7 @@ namespace GenericDiceBot.Services.DiscordBotService
             try
             {
                 await _client.CreateGlobalApplicationCommandAsync(hereCommand.Build());
+                _commandMap.Add(hereCommand.Name, HereCommand);
             }
             catch(HttpException ex)
             {
@@ -55,6 +57,18 @@ namespace GenericDiceBot.Services.DiscordBotService
         }
 
         private async Task SlashCommandExecuted(SocketSlashCommand command)
+        {
+            if(_commandMap.ContainsKey(command.CommandName))
+            {
+                await _commandMap[command.CommandName].Invoke(command);
+            }
+            else
+            {
+                await command.RespondAsync("I don't know this command");
+            }
+        }
+
+        private async Task HereCommand(SocketSlashCommand command)
         {
             _diceChannelId = command.ChannelId;
             await command.RespondAsync($"Dice throw channel is now <#{_diceChannelId}>");
