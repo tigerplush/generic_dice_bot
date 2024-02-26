@@ -1,0 +1,6 @@
+@GenericDiceBot_HostAddress = http://localhost:5070
+
+GET {{GenericDiceBot_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

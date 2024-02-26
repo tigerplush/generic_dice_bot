@@ -1,2 +1,4 @@
-/target
+obj/
+bin/
+.vs/
 .env
