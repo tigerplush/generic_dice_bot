@@ -28,7 +28,14 @@ namespace GenericDiceBot.Controllers
             }
             try
             {
-                DiceResultDtoV1[] results = DiceThrow.Parse(diceRequest.DiceThrow);
+                (DiceResultDtoV1[] results, DiceErrorDtoV1[] errors) = DiceThrow.Parse(diceRequest.DiceThrow);
+                if(errors.Length > 0)
+                {
+                    return BadRequest(new DiceThrowErrorDtoV1()
+                    {
+                        Errors = errors
+                    });
+                }
                 int sum = 0;
                 foreach(DiceResultDtoV1 result in results)
                 {

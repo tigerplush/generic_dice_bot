@@ -5,8 +5,28 @@ namespace GenericDiceBot.Utilities
 {
     public static class DiceThrow
     {
-        public static DiceResultDtoV1[] Parse(string input)
+        /// <summary>
+        /// Parses an input string and returns the resulting dice throws.
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
+        /// <exception cref="DiceParserException"></exception>
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        /// <exception cref="FormatException"></exception>
+        /// <exception cref="OverflowException"></exception>
+        public static (DiceResultDtoV1[], DiceErrorDtoV1[]) Parse(string input)
         {
+            List<DiceErrorDtoV1> errors = new List<DiceErrorDtoV1>();
+            if(string.IsNullOrEmpty(input))
+            {
+                errors.Add(new DiceErrorDtoV1()
+                {
+                    Token = input,
+                    Error = "Input cannot be empty or null"
+                });
+                return (Array.Empty<DiceResultDtoV1>(), errors.ToArray());
+            }
             List<DiceResultDtoV1> results = new List<DiceResultDtoV1>();
             input = input.Replace("+", ":+")
                 .Replace("-", ":-");
@@ -14,51 +34,62 @@ namespace GenericDiceBot.Utilities
             foreach (string token in tokens)
             {
                 string currentToken = token;
-                int operation = 1;
-                if(currentToken.StartsWith("+"))
+                try
                 {
-                    operation = 1;
-                }
-                else if(currentToken.StartsWith("-"))
-                {
-                    operation = -1;
-                }
-                else
-                {
-                    currentToken = $"+{token}";
-                }
-                if (currentToken.Contains("d"))
-                {
-                    string[] diceTokens = currentToken.Substring(1).Split("d");
-                    if(diceTokens.Length != 2)
+                    int operation = 1;
+                    if (currentToken.StartsWith("+"))
                     {
-                        throw new DiceParserException();
+                        operation = 1;
                     }
-                    int count = int.Parse(diceTokens[0]);
-                    int faces = int.Parse(diceTokens[1]);
-                    for(int i = 0; i < count; i++)
+                    else if (currentToken.StartsWith("-"))
                     {
-                        int result = operation * (RandomNumberGenerator.GetInt32(faces) + 1);
+                        operation = -1;
+                    }
+                    else
+                    {
+                        currentToken = $"+{token}";
+                    }
+                    if (currentToken.Contains("d"))
+                    {
+                        string[] diceTokens = currentToken[1..].Split("d");
+                        if (diceTokens.Length != 2)
+                        {
+                            throw new DiceParserException("A dice token must be two numbers separated by a 'd'");
+                        }
+                        int count = int.Parse(diceTokens[0]);
+                        int faces = int.Parse(diceTokens[1]);
+                        for (int i = 0; i < count; i++)
+                        {
+                            int result = operation * (RandomNumberGenerator.GetInt32(faces) + 1);
+                            results.Add(new DiceResultDtoV1()
+                            {
+                                Token = $"1d{faces}",
+                                Result = result,
+                                Type = DiceResultType.Random
+                            });
+                        }
+                    }
+                    else
+                    {
+                        int result = operation * int.Parse(currentToken[1..]);
                         results.Add(new DiceResultDtoV1()
                         {
-                            Token = $"1d{faces}",
+                            Token = currentToken,
                             Result = result,
-                            Type = DiceResultType.Random
+                            Type = DiceResultType.Constant
                         });
                     }
                 }
-                else
+                catch(Exception ex)
                 {
-                    int result = operation * int.Parse(currentToken.Substring(1));
-                    results.Add(new DiceResultDtoV1()
+                    errors.Add(new DiceErrorDtoV1()
                     {
                         Token = currentToken,
-                        Result = result,
-                        Type = DiceResultType.Constant
+                        Error = ex.Message
                     });
                 }
             }
-            return results.ToArray();
+            return (results.ToArray(), errors.ToArray());
         }
     }
 }

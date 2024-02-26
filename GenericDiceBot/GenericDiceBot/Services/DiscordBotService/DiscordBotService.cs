@@ -90,9 +90,16 @@ namespace GenericDiceBot.Services.DiscordBotService
         private async Task ThrowCommand(SocketSlashCommand command)
         {
             string request = (string)command.Data.Options.First().Value;
-            DiceResultDtoV1[] results = DiceThrow.Parse(request);
-            int sum = results.Sum(r => r.Result);
-            await command.RespondAsync(embed: CreateDiceThrowEmbed(request, results, sum));
+            (DiceResultDtoV1[] results, DiceErrorDtoV1[] errors) = DiceThrow.Parse(request);
+            if(errors.Length > 0)
+            {
+                await command.RespondAsync(text: "There was an error with your input string");
+            }
+            else
+            {
+                int sum = results.Sum(r => r.Result);
+                await command.RespondAsync(embed: CreateDiceThrowEmbed(request, results, sum));
+            }
         }
 
         public async Task PostToDiceChannel(string request, DiceResultDtoV1[] results, int sum, string? reason = null, string? requester = null, string? imageUrl = null)
@@ -115,7 +122,17 @@ namespace GenericDiceBot.Services.DiscordBotService
                 return;
             }
 
-            await messageChannel.SendMessageAsync(embed: CreateDiceThrowEmbed(request, results, sum, reason, requester, imageUrl));
+            Embed embed;
+            try
+            {
+                embed = CreateDiceThrowEmbed(request, results, sum, reason, requester, imageUrl);
+            }
+            catch
+            {
+                // Create fallback embed when image url was wrong
+                embed = CreateDiceThrowEmbed(request, results, sum, reason, requester);
+            }
+            await messageChannel.SendMessageAsync(embed: embed);
         }
 
         private Embed CreateDiceThrowEmbed(string request, DiceResultDtoV1[] results, int sum, string? reason = null, string? requester = null, string? imageUrl = null)
